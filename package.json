@@ -46,6 +46,7 @@
       "dotenv-flow": "^4.1.0",
       "drizzle-orm": "^0.39.1",
       "express": "^4.21.2",
+      "ffmpeg-static": "^5.2.0",
       "filesize": "^10.1.6",
       "helmet": "^8.0.0",
       "jsonwebtoken": "^9.0.2",

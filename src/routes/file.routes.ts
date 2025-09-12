@@ -1,13 +1,14 @@
 import * as fileControllers from "../controllers/file.contollers";
 import { Router } from "express";
 import { verifyUser } from "../middlewares/auth.middleware";
-import { dualFileUpload, singleFile } from "../middlewares/multer.middleware";
+import { dualFileUpload, singleFile, videoFile } from "../middlewares/multer.middleware";
 
 const router = Router();
 
 // File upload
 router.post("/upload", verifyUser, singleFile, fileControllers.fileUpload);
 router.post("/upload-with-original", verifyUser, dualFileUpload, fileControllers.fileUploadWithOriginal);
+router.post("/convert-video", verifyUser, videoFile, fileControllers.convertVideo);
 router.get("/originals", verifyUser, fileControllers.getUserOriginals);
 router.post("/originals/bulk-delete", verifyUser, fileControllers.bulkDeleteOriginalFiles);
 
@@ -28,5 +29,7 @@ router.post("/trash/:id", verifyUser, fileControllers.trashFile);
 router.post("/restore/:id", verifyUser, fileControllers.restoreFromTrash);
 
 router.route("/:id").get(verifyUser, fileControllers.getFileDetails).delete(verifyUser, fileControllers.deleteFile);
+
+// Video conversion route
 
 export default router;

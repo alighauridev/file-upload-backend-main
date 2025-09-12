@@ -7,6 +7,8 @@ import StorageService from "../services/storage.services";
 import ApiError from "../utils/ApiError";
 import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
+import { convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
+import { Request } from "express";
 
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
@@ -445,6 +447,62 @@ const bulkTrashFiles = asyncHandler(async (req, res, next) => {
    );
 });
 
+// Video conversion controller
+const convertVideo = asyncHandler(async (req, res, next) => {
+   console.log("Convert Video Api is running");
+   const file = req.file;
+   if (!file) {
+      throw new ApiError(400, "No video file provided");
+   }
+
+   try {
+      console.log("Video Conversition Start");
+      await convertToMJPEG(file, {
+         startSec: req.body.startSec,
+         durationSec: req.body.durationSec,
+         width: req.body.width,
+         height: req.body.height,
+         quality: req.body.quality,
+         fps: req.body.fps,
+         transpose: req.body.transpose,
+         pixFmt: req.body.pixFmt,
+         cropWidth: req.body.cropWidth,
+         cropHeight: req.body.cropHeight,
+         cropXOffset: req.body.cropXOffset,
+         cropYOffset: req.body.cropYOffset,
+         useLanczos: req.body.useLanczos
+      });
+      console.log("Video Conversition Finish");
+
+      // Upload the converted file
+      const userId = req.user?.id!;
+      const { data, error } = await StorageService.uploadFile({
+         file,
+         folderName: userId,
+         userId
+      });
+
+      if (error && !data) {
+         if (req.file?.buffer) {
+            req.file.buffer = Buffer.alloc(0);
+         }
+         return next(new ApiError(400, error));
+      }
+
+      if (file.buffer) {
+         file.buffer = Buffer.alloc(0);
+      }
+
+      if (error || !data) {
+         throw new Error(error || "Failed to upload converted video");
+      }
+
+      res.status(200).json(new ApiResponse(200, data, "Video converted successfully"));
+   } catch (error: any) {
+      throw new ApiError(400, `Video conversion failed: ${error.message}`);
+   }
+});
+
 export {
    archiveFile,
    bulkArchiveFiles,
@@ -463,5 +521,7 @@ export {
    permanentlyDeleteFiles,
    restoreFromTrash,
    trashFile,
-   unarchiveFile
+   unarchiveFile,
+   convertVideo
 };
+
