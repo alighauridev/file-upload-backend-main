@@ -1,0 +1,1 @@
+CREATE INDEX "status_idx" ON "users_files" USING btree ("status");

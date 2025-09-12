@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "loop_delay" SET DEFAULT 300;
