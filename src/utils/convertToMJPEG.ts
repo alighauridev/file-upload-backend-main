@@ -5,30 +5,28 @@ import os from "os";
 import path from "path";
 
 interface VideoConversionOptions {
-   startSec?: number; // Start time in seconds (default: 0)
-   durationSec?: number; // Duration in seconds (default: 20)
-   width?: number; // Output width (default: 240)
-   height?: number; // Output height (default: 240)
-   fps?: number; // Frames per second (default: 24)
-   quality?: number; // 2-31, lower is better (default: 5)
-   transpose?: number; // 0-3 for rotation (default: 1)
-   pixFmt?: string; // Pixel format (default: 'yuvj420p')
-   cropWidth?: number; // Crop width (default: 240)
-   cropHeight?: number; // Crop height (default: 240)
-   cropXOffset?: string; // X offset formula (default: '(iw-280)/2')
-   cropYOffset?: string; // Y offset (default: '0')
-   useLanczos?: boolean; // Use lanczos scaling (default: false)
+   startSec?: number;
+   durationSec?: number;
+   width?: number;
+   height?: number;
+   fps?: number;
+   quality?: number;
+   transpose?: number;
+   pixFmt?: string;
+   cropWidth?: number;
+   cropHeight?: number;
+   cropXOffset?: string;
+   cropYOffset?: string;
+   useLanczos?: boolean;
 }
 
 async function convertToMJPEG(file: Express.Multer.File, options: VideoConversionOptions = {}): Promise<void> {
-   // File size check (50MB limit)
    const fileSizeMB = file.size / (1024 * 1024);
    const maxSizeMB = 50;
    if (fileSizeMB > maxSizeMB) {
       throw new Error(`File too large: ${fileSizeMB.toFixed(1)}MB. Maximum file size is ${maxSizeMB}MB.`);
    }
 
-   // Resolve FFmpeg path
    let ffmpegPath: string | undefined;
    try {
       const req = createRequire(process.cwd() + "/");
@@ -36,14 +34,13 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    } catch (e) {
       ffmpegPath = process.env.FFMPEG_PATH;
    }
-
    if (!ffmpegPath) {
       throw new Error("FFmpeg not available");
    }
 
    const {
       startSec = 0,
-      durationSec = 30, // Default to 30 instead of 20
+      durationSec = 30,
       width = 240,
       height = 240,
       fps = 24,
@@ -57,12 +54,11 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       useLanczos = false
    } = options;
 
-   // FIXED: Remove the arbitrary 20-second limit and properly handle the values
    const safeStart = Math.max(0, Number(startSec) || 0);
-   const safeDuration = Math.max(0.1, Number(durationSec) || 30); // Remove the 20-second limit
+   const safeDuration = Math.max(0.1, Number(durationSec) || 30);
    const safeWidth = Math.min(Number(width) || 240, 480);
    const safeHeight = Math.min(Number(height) || 240, 480);
-   const safeFps = Math.min(Number(fps) || 24, 60); // Increased max fps
+   const safeFps = Math.min(Number(fps) || 24, 60);
    const safeCropWidth = Math.min(Number(cropWidth) || 240, 480);
    const safeCropHeight = Math.min(Number(cropHeight) || 240, 480);
 
@@ -74,15 +70,10 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       safeFps
    });
 
-   const tmpDir = os.tmpdir();
-   const inputPath = path.join(tmpDir, `in_${Date.now()}.mp4`);
-   const outputPath = path.join(tmpDir, `out_${Date.now()}.mjpeg`);
+   const inputPath = file.path; // Use disk path from Multer
+   const outputPath = path.join(os.tmpdir(), `out_${Date.now()}.mjpeg`);
 
    try {
-      // Write input file
-      await fs.writeFile(inputPath, file.buffer);
-
-      // Build video filter chain to match client-side
       const filters = [
          `fps=${safeFps}`,
          `scale=${safeWidth}:${safeHeight}:flags=${useLanczos ? "lanczos" : "bicubic"}`,
@@ -91,17 +82,16 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       ];
       const vf = filters.join(",");
 
-      // FFmpeg arguments aligned with client-side
       const args = [
          "-hide_banner",
          "-loglevel",
          "error",
          "-ss",
-         String(safeStart), // Start time for trimming
+         String(safeStart),
          "-i",
          inputPath,
          "-t",
-         String(safeDuration), // Duration for trimming - this is the key for trimming!
+         String(safeDuration),
          "-vf",
          vf,
          "-pix_fmt",
@@ -117,14 +107,13 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
 
       console.log("FFmpeg command:", ffmpegPath, args.join(" "));
 
-      // Execute FFmpeg with timeout
       await new Promise<void>((resolve, reject) => {
          const proc = spawn(ffmpegPath as string, args, {
             windowsHide: true,
             stdio: ["ignore", "ignore", "pipe"]
          });
 
-         const timeoutMs = 5 * 60 * 1000; // 5 minutes
+         const timeoutMs = 5 * 60 * 1000;
          const timer = setTimeout(() => {
             try {
                proc.kill("SIGKILL");
@@ -157,13 +146,12 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
          });
       });
 
-      // Read and update file object
       const converted = await fs.readFile(outputPath);
       const baseName = (file.originalname?.split(".").slice(0, -1).join(".") || "video").trim() || "video";
 
       console.log(`Conversion complete. Original size: ${file.size}, New size: ${converted.length}`);
 
-      file.buffer = converted;
+      file.path = outputPath; // Update to new path
       file.size = converted.length;
       file.originalname = `${baseName}.mjpeg`;
       file.mimetype = "video/x-mjpeg";
@@ -171,7 +159,6 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       console.error("Video conversion error:", error);
       throw new Error(`Video conversion failed: ${error.message || "Unknown error"}`);
    } finally {
-      // Clean up temporary files
       await Promise.allSettled([fs.unlink(inputPath).catch(() => {}), fs.unlink(outputPath).catch(() => {})]);
    }
 }

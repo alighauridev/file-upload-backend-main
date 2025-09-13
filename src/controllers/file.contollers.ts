@@ -9,6 +9,7 @@ import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
 import { convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
 import { Request } from "express";
+import { promises as fs } from "node:fs";
 
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
@@ -456,7 +457,7 @@ const convertVideo = asyncHandler(async (req, res, next) => {
    }
 
    try {
-      console.log("Video Conversition Start");
+      console.log("Video Conversion Start");
       await convertToMJPEG(file, {
          startSec: req.body.startSec,
          durationSec: req.body.durationSec,
@@ -472,33 +473,23 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          cropYOffset: req.body.cropYOffset,
          useLanczos: req.body.useLanczos
       });
-      console.log("Video Conversition Finish");
+      console.log("Video Conversion Finish");
 
-      // Upload the converted file
       const userId = req.user?.id!;
       const { data, error } = await StorageService.uploadFile({
-         file,
+         file, // Now uses file.path
          folderName: userId,
          userId
       });
 
-      if (error && !data) {
-         if (req.file?.buffer) {
-            req.file.buffer = Buffer.alloc(0);
-         }
-         return next(new ApiError(400, error));
-      }
-
-      if (file.buffer) {
-         file.buffer = Buffer.alloc(0);
-      }
-
       if (error || !data) {
-         throw new Error(error || "Failed to upload converted video");
+         if (file.path) await fs.unlink(file.path).catch(() => {});
+         throw new ApiError(400, error || "Failed to upload converted video");
       }
 
       res.status(200).json(new ApiResponse(200, data, "Video converted successfully"));
    } catch (error: any) {
+      if (file?.path) await fs.unlink(file.path).catch(() => {});
       throw new ApiError(400, `Video conversion failed: ${error.message}`);
    }
 });
