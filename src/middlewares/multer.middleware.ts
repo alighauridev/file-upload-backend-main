@@ -1,5 +1,7 @@
 import multer from "multer";
 import { VIDEO_MIME_TYPES } from "../constants";
+import os from "os";
+import path from "path";
 
 const multerUpload = multer({
    storage: multer.memoryStorage(),
@@ -8,8 +10,18 @@ const multerUpload = multer({
    }
 });
 
+const videoStorage = multer.diskStorage({
+   destination: (req, file, cb) => {
+      cb(null, os.tmpdir());
+   },
+   filename: (req, file, cb) => {
+      const uniqueName = `${Date.now()}-${path.basename(file.originalname)}`;
+      cb(null, uniqueName);
+   }
+});
+
 const videoUpload = multer({
-   storage: multer.memoryStorage(),
+   storage: videoStorage,
    limits: {
       fileSize: 100 * 1024 * 1024,
       files: 1
