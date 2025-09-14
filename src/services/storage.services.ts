@@ -1,5 +1,6 @@
 import bytes from "bytes";
 import { filesize } from "filesize";
+import fs from "node:fs/promises";
 import { CACHE_KEY_PREFIX, FileType } from "../constants";
 import { env } from "../env";
 import { userCache } from "../middlewares/auth.middleware";
@@ -8,7 +9,6 @@ import { supabase } from "../utils/supabase-client";
 import FileService, { getFileType } from "./file.services";
 import OriginalFileService from "./original-file.services";
 import UserService from "./user.services";
-
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -18,11 +18,9 @@ class StorageService {
       let data = null;
 
       try {
-         // Validate file type
          const fileType = getFileType(file.mimetype);
          const fileSize = Number(file.size);
 
-         // Validate file size based on type
          if (fileType === FileType.IMAGE && fileSize > MAX_IMAGE_SIZE) {
             return {
                error: `Image size exceeds maximum allowed size of ${filesize(MAX_IMAGE_SIZE)}`,
@@ -47,16 +45,41 @@ class StorageService {
          const newFileName = await this.processFileName(fileName || file.originalname, userId, file.mimetype);
          const fullFilePath = `${folderPath}${newFileName}`;
 
+         let fileBuffer: Buffer;
+         if (file.buffer) {
+            fileBuffer = file.buffer;
+         } else if (file.path) {
+            fileBuffer = await fs.readFile(file.path);
+         } else {
+            return {
+               error: "No file buffer or path available",
+               data: null
+            };
+         }
+
          console.time("supabase_upload");
          console.log(
             `[uploadFile] Uploading to bucket='${env.SUPABASE_BUCKET_NAME}' path='${fullFilePath}' size=${fileSize}B type='${file.mimetype}' url='${env.SUPABASE_URL}'`
          );
-         const response = await supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(fullFilePath, file.buffer, {
+
+         const response = await supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(fullFilePath, fileBuffer, {
             contentType: file.mimetype,
             cacheControl: "3600"
          });
          console.timeEnd("supabase_upload");
 
+         if (file.path) {
+            try {
+               await fs.access(file.path);
+               await fs.unlink(file.path);
+               console.log(`✅ Cleaned up temp file: ${file.path}`);
+            } catch (cleanupError: any) {
+               if (cleanupError.code !== "ENOENT") {
+                  console.warn(`Failed to delete temp file: ${file.path}`, cleanupError.message);
+               }
+               // If ENOENT, file already deleted - that's fine
+            }
+         }
          if (response.error && response.data === null) {
             error = response.error.message;
             return {
@@ -64,6 +87,7 @@ class StorageService {
                data: null
             };
          }
+
          const fileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${fullFilePath}`;
 
          console.time("db_create_and_storage_update");
@@ -79,8 +103,8 @@ class StorageService {
             UserService.updateStorageUsed(userId, file.size)
          ]);
          console.timeEnd("db_create_and_storage_update");
-         const cacheKey = `${CACHE_KEY_PREFIX.users}:${userId}`;
 
+         const cacheKey = `${CACHE_KEY_PREFIX.users}:${userId}`;
          if (storage) {
             userCache.del(cacheKey);
          }
@@ -92,6 +116,17 @@ class StorageService {
             data
          };
       } catch (err: any) {
+         if (file.path) {
+            try {
+               await fs.access(file.path);
+               await fs.unlink(file.path);
+            } catch (cleanupError: any) {
+               if (cleanupError.code !== "ENOENT") {
+                  console.warn(`Failed to delete temp file on error: ${file.path}`, cleanupError.message);
+               }
+            }
+         }
+
          return {
             error: err.message,
             data
@@ -480,7 +515,7 @@ class StorageService {
          "image/jpg": "jpg",
          "image/png": "png",
          "image/webp": "webp",
-         "image/gif": "gif",
+         "image/gif": "gif"
       };
       const forcedExt = mimeType ? mimeToExt[mimeType] : undefined;
       const origExt = originalName.split(".").pop()?.toLowerCase();

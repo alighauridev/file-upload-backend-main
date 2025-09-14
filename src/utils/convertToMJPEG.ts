@@ -158,8 +158,6 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    } catch (error: any) {
       console.error("Video conversion error:", error);
       throw new Error(`Video conversion failed: ${error.message || "Unknown error"}`);
-   } finally {
-      await Promise.allSettled([fs.unlink(inputPath).catch(() => {}), fs.unlink(outputPath).catch(() => {})]);
    }
 }
 

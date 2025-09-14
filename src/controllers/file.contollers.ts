@@ -10,6 +10,7 @@ import asyncHandler from "../utils/asyncHandler";
 import { convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
 import { Request } from "express";
 import { promises as fs } from "node:fs";
+import { videoQueue } from "../utils/queue";
 
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
@@ -448,50 +449,105 @@ const bulkTrashFiles = asyncHandler(async (req, res, next) => {
    );
 });
 
-// Video conversion controller
 const convertVideo = asyncHandler(async (req, res, next) => {
    console.log("Convert Video Api is running");
    const file = req.file;
    if (!file) {
-      throw new ApiError(400, "No video file provided");
+      return next(new ApiError(400, "No video file provided"));
    }
+
+   const options = {
+      startSec: req.body.startSec,
+      durationSec: req.body.durationSec,
+      width: req.body.width,
+      height: req.body.height,
+      quality: req.body.quality,
+      fps: req.body.fps,
+      transpose: req.body.transpose,
+      pixFmt: req.body.pixFmt,
+      cropWidth: req.body.cropWidth,
+      cropHeight: req.body.cropHeight,
+      cropXOffset: req.body.cropXOffset,
+      cropYOffset: req.body.cropYOffset,
+      useLanczos: req.body.useLanczos
+   };
+
+   console.log("Vide File :", file);
+   console.log("Buffer", file.buffer);
 
    try {
-      console.log("Video Conversion Start");
-      await convertToMJPEG(file, {
-         startSec: req.body.startSec,
-         durationSec: req.body.durationSec,
-         width: req.body.width,
-         height: req.body.height,
-         quality: req.body.quality,
-         fps: req.body.fps,
-         transpose: req.body.transpose,
-         pixFmt: req.body.pixFmt,
-         cropWidth: req.body.cropWidth,
-         cropHeight: req.body.cropHeight,
-         cropXOffset: req.body.cropXOffset,
-         cropYOffset: req.body.cropYOffset,
-         useLanczos: req.body.useLanczos
-      });
-      console.log("Video Conversion Finish");
+      const job = await videoQueue.add(
+         "process",
+         {
+            file: {
+               fieldname: file.fieldname,
+               originalname: file.originalname,
+               mimetype: file.mimetype,
+               size: file.size,
+               filename: file.filename,
+               path: file.path
+            },
+            userId: req.user?.id,
+            options
+         },
+         {
+            attempts: 2,
+            backoff: {
+               type: "fixed",
+               delay: 10000
+            },
+            removeOnComplete: 5,
+            removeOnFail: 10,
+            jobId: `video-${Date.now()}`
+         }
+      );
 
-      const userId = req.user?.id!;
-      const { data, error } = await StorageService.uploadFile({
-         file, // Now uses file.path
-         folderName: userId,
-         userId
-      });
-
-      if (error || !data) {
-         if (file.path) await fs.unlink(file.path).catch(() => {});
-         throw new ApiError(400, error || "Failed to upload converted video");
-      }
-
-      res.status(200).json(new ApiResponse(200, data, "Video converted successfully"));
+      res.status(202).json(
+         new ApiResponse(
+            202,
+            {
+               jobId: job.id,
+               status: "queued"
+            },
+            "Video queued for processing"
+         )
+      );
    } catch (error: any) {
-      if (file?.path) await fs.unlink(file.path).catch(() => {});
-      throw new ApiError(400, `Video conversion failed: ${error.message}`);
+      if (file?.path) {
+         try {
+            await fs.unlink(file.path);
+         } catch (cleanupError) {
+            console.warn("Failed to cleanup file after job creation failure:", cleanupError);
+         }
+      }
+      return next(new ApiError(500, error.message || "Video conversion failed"));
    }
+});
+
+const getJobStatus = asyncHandler(async (req, res, next) => {
+   const { jobId } = req.params;
+   const job = await videoQueue.getJob(jobId);
+
+   if (!job) {
+      throw new ApiError(404, "Job not found");
+   }
+
+   const state = await job.getState();
+
+   const progress = job.progress;
+
+   res.status(200).json(
+      new ApiResponse(
+         200,
+         {
+            jobId,
+            status: state,
+            progress,
+            result: job.returnvalue
+         },
+         "Job status"
+      )
+   );
 });
 
 export {
@@ -513,6 +569,7 @@ export {
    restoreFromTrash,
    trashFile,
    unarchiveFile,
-   convertVideo
+   convertVideo,
+   getJobStatus
 };
 

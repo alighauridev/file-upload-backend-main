@@ -30,6 +30,6 @@ router.post("/restore/:id", verifyUser, fileControllers.restoreFromTrash);
 
 router.route("/:id").get(verifyUser, fileControllers.getFileDetails).delete(verifyUser, fileControllers.deleteFile);
 
-// Video conversion route
+router.get("/conversion-status/:jobId", verifyUser, fileControllers.getJobStatus); // Changed this line
 
 export default router;
