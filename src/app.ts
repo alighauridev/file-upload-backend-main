@@ -15,13 +15,6 @@ const payloadLimit = "50mb";
 
 app.use(helmet(config.helemt));
 
-app.use((req, res, next) => {
-   res.setHeader("Connection", "keep-alive");
-   res.setHeader("Keep-Alive", "timeout=600, max=1000");
-   res.removeHeader("Upgrade");
-   next();
-});
-
 app.use(express.json({ limit: payloadLimit }));
 app.use(
    express.urlencoded({
