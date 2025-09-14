@@ -8,4 +8,6 @@ const server = app.listen(env.PORT, async () => {
 server.keepAliveTimeout = 600000;
 server.headersTimeout = 610000;
 server.timeout = 600000;
+server.setTimeout(600000);
+
 export default app;
