@@ -20,7 +20,7 @@ class StorageService {
       try {
          const fileType = getFileType(file.mimetype);
          const fileSize = Number(file.size);
-
+         console.log(`[uploadFile] Received file: ${file.originalname} size=${filesize(fileSize)}B type='${file.mimetype}'`);
          if (fileType === FileType.IMAGE && fileSize > MAX_IMAGE_SIZE) {
             return {
                error: `Image size exceeds maximum allowed size of ${filesize(MAX_IMAGE_SIZE)}`,
