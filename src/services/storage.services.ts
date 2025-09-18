@@ -134,6 +134,105 @@ class StorageService {
       }
    }
 
+   public static async uploadVideoAndAudio({
+      videoFile,
+      audioFile,
+      fileName,
+      folderName,
+      userId
+   }: {
+      videoFile: Express.Multer.File;
+      audioFile: Express.Multer.File;
+      fileName?: string;
+      folderName: string;
+      userId: string;
+   }): Promise<UploadFileResponse> {
+      try {
+         const videoFileSize = Number(videoFile.size);
+         const audioFileSize = Number(audioFile.size);
+         const totalSize = videoFileSize + audioFileSize;
+
+         if (videoFileSize > MAX_VIDEO_SIZE) {
+            return {
+               error: `Video size exceeds maximum allowed size of ${filesize(MAX_VIDEO_SIZE)}`,
+               data: null
+            };
+         }
+
+         const storageInfo = await UserService.hasEnoughStorage(userId, totalSize);
+         if (!storageInfo?.hasEnough) {
+            return {
+               error: `User storage limit exceeded. Available: ${bytes(storageInfo?.availableBytes!)}`,
+               data: null
+            };
+         }
+
+         const folderPath = `${folderName}/`;
+
+         const videoFileName = await this.processFileName(fileName || videoFile.originalname, userId, "video/x-mjpeg");
+         const audioFileName = videoFileName.replace(/\.[^.]+$/, ".aac");
+
+         const videoFilePath = `${folderPath}${videoFileName}`;
+         const audioFilePath = `${folderPath}${audioFileName}`;
+
+         if (!videoFile.buffer || !audioFile.buffer) {
+            return { error: "Video or audio buffer not available", data: null };
+         }
+
+         const videoBuffer = videoFile.buffer;
+         const audioBuffer = audioFile.buffer;
+
+         const [videoResponse, audioResponse] = await Promise.all([
+            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(videoFilePath, videoBuffer, {
+               contentType: "video/x-mjpeg",
+               cacheControl: "3600"
+            }),
+            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(audioFilePath, audioBuffer, {
+               contentType: "audio/aac",
+               cacheControl: "3600"
+            })
+         ]);
+
+         if (videoResponse.error && audioResponse.error) {
+            return { error: `Failed to upload both video and audio: ${videoResponse.error.message}`, data: null };
+         } else if (videoResponse.error) {
+            return { error: `Failed to upload video: ${videoResponse.error.message}`, data: null };
+         } else if (audioResponse.error) {
+            return { error: `Failed to upload audio: ${audioResponse.error.message}`, data: null };
+         }
+
+         videoFile.buffer = Buffer.alloc(0);
+         audioFile.buffer = Buffer.alloc(0);
+
+         const videoUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${videoFilePath}`;
+         const audioUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${audioFilePath}`;
+
+         // Create database record and update storage
+         const [userFile, storage] = await Promise.all([
+            FileService.create({
+               fileName: videoFileName,
+               fileUrl: videoUrl,
+               audioUrl: audioUrl,
+               mimeType: "video/x-mjpeg",
+               fileType: FileType.VIDEO,
+               fileSize: filesize(totalSize, { standard: "jedec" }),
+               userId: userId
+            }),
+            UserService.updateStorageUsed(userId, totalSize)
+         ]);
+
+         // Clear cache
+         const cacheKey = `${CACHE_KEY_PREFIX.users}:${userId}`;
+         if (storage) {
+            userCache.del(cacheKey);
+         }
+
+         return { error: null, data: userFile };
+      } catch (err: any) {
+         return { error: err.message, data: null };
+      }
+   }
+
    public static async uploadWithOriginal({
       originalFile,
       processedFile,

@@ -7,7 +7,7 @@ import StorageService from "../services/storage.services";
 import ApiError from "../utils/ApiError";
 import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
-import { convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
+import { convertToAAC, convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
 import { Request } from "express";
 import { videoQueue } from "../utils/queue";
 import path from "path";
@@ -459,18 +459,13 @@ const convertVideo = asyncHandler(async (req, res, next) => {
       throw new ApiError(400, "No video file provided");
    }
 
-   const originalInputPath = file.path;
-   let convertedOutputPath: string | null = null;
-
    try {
       console.log("Backend Video Conversion Start");
       console.log(`Processing file: ${file.originalname}, Size: ${file.size} bytes`);
-      console.log("File: ", file);
 
-      // Convert video with fps and quality from frontend
-      await convertToMJPEG(file, {
-         fps: req.body.fps, // Added
-         quality: req.body.quality || 5, // Added
+      const videoOptions: VideoConversionOptions = {
+         fps: req.body.fps,
+         quality: req.body.quality || 5,
          transpose: req.body.transpose,
          pixFmt: req.body.pixFmt,
          cropWidth: req.body.cropWidth,
@@ -478,50 +473,30 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          cropXOffset: req.body.cropXOffset,
          cropYOffset: req.body.cropYOffset,
          useLanczos: req.body.useLanczos
-      });
+      };
 
-      console.log("Backend Video Conversion Finish");
+      // Convert video to MJPEG and audio to AAC in parallel
+      const [videoFile, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToAAC(file)]);
 
-      convertedOutputPath = file.path;
+      console.log("Backend Video and Audio Conversion Finish");
 
       const userId = req.user?.id!;
-      const { data, error } = await StorageService.uploadFile({
-         file,
+      const { data, error } = await StorageService.uploadVideoAndAudio({
+         videoFile: file,
+         audioFile,
          folderName: userId,
          userId
       });
 
       if (error || !data) {
-         throw new Error(error || "Failed to upload converted video");
+         throw new Error(error || "Failed to upload converted video and audio");
       }
 
-      console.log("Video upload completed successfully");
-      res.status(200).json(new ApiResponse(200, data, "Video converted successfully"));
+      console.log("Video and audio upload completed successfully");
+      res.status(200).json(new ApiResponse(200, data, "Video converted and uploaded successfully"));
    } catch (error: any) {
       console.error("Video conversion process failed:", error);
       throw new ApiError(400, `Video conversion failed: ${error.message}`);
-   } finally {
-      const cleanupPromises = [];
-
-      if (originalInputPath) {
-         cleanupPromises.push(
-            fs
-               .unlink(originalInputPath)
-               .then(() => console.log(`Cleaned up original input: ${originalInputPath}`))
-               .catch((err) => console.warn(`Failed to cleanup original input: ${originalInputPath}`, err))
-         );
-      }
-
-      if (convertedOutputPath && convertedOutputPath !== originalInputPath) {
-         cleanupPromises.push(
-            fs
-               .unlink(convertedOutputPath)
-               .then(() => console.log(`Cleaned up converted output: ${convertedOutputPath}`))
-               .catch((err) => console.warn(`Failed to cleanup converted output: ${convertedOutputPath}`, err))
-         );
-      }
-
-      await Promise.allSettled(cleanupPromises);
    }
 });
 
