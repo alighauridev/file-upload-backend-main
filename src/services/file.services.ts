@@ -30,26 +30,24 @@ class FileService {
       });
       return userFile;
    }
-
    public static async getLatestFrameNumber(userId: string): Promise<number> {
       const result = await db.query.userFiles.findFirst({
          where: and(eq(userFiles.userId, userId), like(userFiles.fileName, "frame_%")),
          orderBy: (u, { desc }) => [
             desc(
-               sql`CASE 
-                  WHEN ${u.fileName} ~ '^frame_[0-9]+' 
-                  THEN CAST(SUBSTRING(${u.fileName}, '^frame_([0-9]+)') AS INTEGER)
-                  ELSE 0 
-               END`
+               sql`CAST(
+              SUBSTRING(${u.fileName} FROM 'frame_([0-9]+)') 
+            AS INT)`
             )
          ],
          columns: {
             fileName: true
          }
       });
+      if (!result?.fileName) return 0;
 
-      const match = result?.fileName?.match(/^frame_(\d+)/);
-      return parseInt(String(match?.[1]), 10);
+      const match = result.fileName.match(/^frame_(\d+)/);
+      return match ? parseInt(match[1], 10) : 0;
    }
 
    public static async listByUserId(userId: string, status: (typeof AvailableFileStatus)[number] = FileStatusType.ACTIVE) {
