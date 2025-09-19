@@ -29,7 +29,6 @@
       "@types/morgan": "^1.9.9",
       "@types/multer": "^1.4.12",
       "@types/node": "^20.12.11",
-      "concurrently": "^9.2.1",
       "cross-env": "^7.0.3",
       "drizzle-kit": "^0.31.4",
       "nodemon": "^3.1.0",
@@ -41,7 +40,6 @@
    "dependencies": {
       "@supabase/supabase-js": "^2.49.10",
       "bcryptjs": "^3.0.0",
-      "bullmq": "^5.58.5",
       "bytes": "^3.1.2",
       "compression": "^1.8.0",
       "cors": "^2.8.5",
@@ -52,7 +50,6 @@
       "ffmpeg-static": "^5.2.0",
       "filesize": "^10.1.6",
       "helmet": "^8.0.0",
-      "ioredis": "^5.7.0",
       "jsonwebtoken": "^9.0.2",
       "morgan": "^1.10.0",
       "multer": "^1.4.5-lts.1",
