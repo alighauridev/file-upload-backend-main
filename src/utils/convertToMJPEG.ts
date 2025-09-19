@@ -1,12 +1,12 @@
-// utils/convertToMJPEG.ts
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import { createRequire } from "module";
 import os from "os";
 import path from "path";
+
 interface VideoConversionOptions {
-   fps?: number; // Added
-   quality?: number; // Added
+   fps?: number;
+   quality?: number;
    transpose?: number;
    pixFmt?: string;
    cropWidth?: number;
