@@ -333,18 +333,28 @@ class StorageService {
                data: null
             };
          }
+
          const fileUrl = file.fileUrl;
-         const pathArray = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/");
-         const filePath = pathArray[1];
-         if (!filePath) {
+         const videoPath = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+
+         if (!videoPath) {
             return {
                error: "Invalid File Path",
                data: null
             };
          }
 
+         const filesToDelete = [videoPath];
+
+         if (file.audioUrl) {
+            const audioPath = file.audioUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+            if (audioPath) {
+               filesToDelete.push(audioPath);
+            }
+         }
+
          const [storageResult, _] = await Promise.all([
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove([filePath]),
+            supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove(filesToDelete),
             FileService.delete(fileId)
          ]);
 
@@ -354,6 +364,7 @@ class StorageService {
                data: null
             };
          }
+
          await UserService.updateStorageUsed(file.userId, bytes(file.fileSize) as number, "decrease");
 
          data = file;
@@ -392,18 +403,26 @@ class StorageService {
          const files = await FileService.findManyFiles(fileIds, {
             id: true,
             fileUrl: true,
+            audioUrl: true,
             fileSize: true
          });
 
          const validFiles = files.filter(Boolean);
-         const storagePaths = validFiles
-            .map((file: any) => {
-               const fileUrl = file.fileUrl as string;
-               if (!fileUrl) return null;
-               const pathArray = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/");
-               return pathArray.length > 1 ? pathArray[1] : null;
-            })
-            .filter(Boolean) as string[];
+         const storagePaths: string[] = [];
+
+         validFiles.forEach((file: any) => {
+            const videoPath = file.fileUrl?.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+            if (videoPath) {
+               storagePaths.push(videoPath);
+            }
+
+            if (file.audioUrl) {
+               const audioPath = file.audioUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+               if (audioPath) {
+                  storagePaths.push(audioPath);
+               }
+            }
+         });
 
          const calculateFilesSize = validFiles
             .map((file: any) => {

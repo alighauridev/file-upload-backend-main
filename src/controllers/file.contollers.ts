@@ -1,5 +1,3 @@
-import os from "os";
-import path from "path";
 import { AvailableFileStatus, CACHE_KEY_PREFIX, FileStatusType, FileType, IMAGE_MIME_TYPES, VIDEO_MIME_TYPES } from "../constants";
 import { User } from "../database/schema";
 import { userCache } from "../middlewares/auth.middleware";
@@ -10,7 +8,6 @@ import ApiError from "../utils/ApiError";
 import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
 import { convertToAAC, convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
-import { supabase } from "../utils/supabase-client";
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
    const file = req.file as Express.Multer.File;
