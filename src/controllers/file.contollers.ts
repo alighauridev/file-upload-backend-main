@@ -1,3 +1,5 @@
+import os from "os";
+import path from "path";
 import { AvailableFileStatus, CACHE_KEY_PREFIX, FileStatusType, FileType, IMAGE_MIME_TYPES, VIDEO_MIME_TYPES } from "../constants";
 import { User } from "../database/schema";
 import { userCache } from "../middlewares/auth.middleware";
@@ -8,10 +10,6 @@ import ApiError from "../utils/ApiError";
 import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
 import { convertToAAC, convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
-import { Request } from "express";
-import { videoQueue } from "../utils/queue";
-import path from "path";
-import os from "os";
 import { supabase } from "../utils/supabase-client";
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
@@ -450,9 +448,6 @@ const bulkTrashFiles = asyncHandler(async (req, res, next) => {
    );
 });
 
-// controllers/file.controllers.ts
-import { promises as fs } from "fs";
-
 const convertVideo = asyncHandler(async (req, res, next) => {
    const file = req.file;
    if (!file) {
@@ -475,12 +470,13 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          useLanczos: req.body.useLanczos
       };
 
-      // Convert video to MJPEG and audio to AAC in parallel
-      const [videoFile, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToAAC(file)]);
+      const [, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToAAC(file)]);
 
       console.log("Backend Video and Audio Conversion Finish");
 
       const userId = req.user?.id!;
+
+      console.log("Starting upload to storage...");
       const { data, error } = await StorageService.uploadVideoAndAudio({
          videoFile: file,
          audioFile,
@@ -488,237 +484,21 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          userId
       });
 
+      console.log("Storage upload result:", { data: !!data, error });
+
       if (error || !data) {
-         throw new Error(error || "Failed to upload converted video and audio");
+         console.error("Upload failed:", error);
+         return next(new ApiError(400, error || "Failed to upload converted video and audio"));
       }
 
       console.log("Video and audio upload completed successfully");
+      console.log("Sending response to client...");
+
       res.status(200).json(new ApiResponse(200, data, "Video converted and uploaded successfully"));
+      console.log("Response sent successfully");
    } catch (error: any) {
       console.error("Video conversion process failed:", error);
-      throw new ApiError(400, `Video conversion failed: ${error.message}`);
-   }
-});
-
-// const convertVideo = asyncHandler(async (req, res, next) => {
-//    console.log("Convert Video Api is running");
-//    const file = req.file;
-//    if (!file) {
-//       return next(new ApiError(400, "No video file provided"));
-//    }
-
-//    const options = {
-//       startSec: req.body.startSec,
-//       durationSec: req.body.durationSec,
-//       width: req.body.width,
-//       height: req.body.height,
-//       quality: req.body.quality,
-//       fps: req.body.fps,
-//       transpose: req.body.transpose,
-//       pixFmt: req.body.pixFmt,
-//       cropWidth: req.body.cropWidth,
-//       cropHeight: req.body.cropHeight,
-//       cropXOffset: req.body.cropXOffset,
-//       cropYOffset: req.body.cropYOffset,
-//       useLanczos: req.body.useLanczos
-//    };
-
-//    console.log("Vide File :", file);
-//    console.log("Buffer", file.buffer);
-
-//    try {
-//       const job = await videoQueue.add(
-//          "process",
-//          {
-//             file: {
-//                fieldname: file.fieldname,
-//                originalname: file.originalname,
-//                mimetype: file.mimetype,
-//                size: file.size,
-//                filename: file.filename,
-//                path: file.path
-//             },
-//             userId: req.user?.id,
-//             options
-//          },
-//          {
-//             attempts: 2,
-//             backoff: {
-//                type: "fixed",
-//                delay: 10000
-//             },
-//             removeOnComplete: 5,
-//             removeOnFail: 10,
-//             jobId: `video-${Date.now()}`
-//          }
-//       );
-
-//       res.status(202).json(
-//          new ApiResponse(
-//             202,
-//             {
-//                jobId: job.id,
-//                status: "queued"
-//             },
-//             "Video queued for processing"
-//          )
-//       );
-//    } catch (error: any) {
-//       if (file?.path) {
-//          try {
-//             await fs.unlink(file.path);
-//          } catch (cleanupError) {
-//             console.warn("Failed to cleanup file after job creation failure:", cleanupError);
-//          }
-//       }
-//       return next(new ApiError(500, error.message || "Video conversion failed"));
-//    }
-// });
-
-const getJobStatus = asyncHandler(async (req, res, next) => {
-   const { jobId } = req.params;
-   const job = await videoQueue.getJob(jobId);
-
-   if (!job) {
-      throw new ApiError(404, "Job not found");
-   }
-
-   const state = await job.getState();
-
-   const progress = job.progress;
-
-   res.status(200).json(
-      new ApiResponse(
-         200,
-         {
-            jobId,
-            status: state,
-            progress,
-            result: job.returnvalue
-         },
-         "Job status"
-      )
-   );
-});
-
-const convertVideoFromUrl = asyncHandler(async (req, res, next) => {
-   const { fileName, videoUrl, ...options } = req.body;
-   const userId = req.user?.id;
-
-   // Validation
-   if (!fileName || !videoUrl) {
-      return next(new ApiError(400, "fileName and videoUrl are required"));
-   }
-
-   if (!userId) {
-      return next(new ApiError(401, "User authentication required"));
-   }
-
-   let tempPath: string | null = null;
-
-   try {
-      console.log(`[VideoConversion] Starting conversion for user: ${userId}`);
-      console.log(`[VideoConversion] Downloading from: ${videoUrl}`);
-
-      // Download video from Supabase
-      const downloadResponse = await fetch(videoUrl);
-
-      if (!downloadResponse.ok) {
-         throw new ApiError(400, `Failed to download video: ${downloadResponse.statusText}`);
-      }
-
-      const contentLength = downloadResponse.headers.get("content-length");
-      const fileSize = contentLength ? parseInt(contentLength) : 0;
-
-      // Validate file size (100MB max)
-      const maxSize = 100 * 1024 * 1024;
-      if (fileSize > maxSize) {
-         throw new ApiError(400, `Video file too large: ${(fileSize / (1024 * 1024)).toFixed(1)}MB. Maximum allowed: 100MB`);
-      }
-
-      // Convert to buffer
-      const arrayBuffer = await downloadResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // Create temporary file
-      const tempFileName = `temp-${Date.now()}-${userId}.mp4`;
-      tempPath = path.join(os.tmpdir(), tempFileName);
-      await fs.writeFile(tempPath, buffer);
-
-      console.log(`[VideoConversion] Downloaded ${buffer.length} bytes to ${tempPath}`);
-
-      // Create proper Express.Multer.File object
-      const fileObject: Express.Multer.File = {
-         fieldname: "video",
-         originalname: fileName,
-         encoding: "7bit",
-         mimetype: "video/mp4",
-         size: buffer.length,
-         destination: os.tmpdir(),
-         filename: tempFileName,
-         path: tempPath,
-         buffer: Buffer.alloc(0),
-         stream: null as any
-      };
-
-      // Convert video
-      console.log(`[VideoConversion] Starting FFmpeg conversion...`);
-      await convertToMJPEG(fileObject, options);
-      console.log(`[VideoConversion] FFmpeg conversion completed`);
-
-      // Upload converted file to storage
-      const uploadResult = await StorageService.uploadFile({
-         file: fileObject,
-         folderName: userId,
-         userId
-      });
-
-      if (uploadResult.error) {
-         throw new ApiError(500, `Upload failed: ${uploadResult.error}`);
-      }
-
-      console.log(`[VideoConversion] Upload completed successfully`);
-
-      // Clean up: Delete raw file from Supabase
-      const { error: deleteError } = await supabase.storage.from("raw-videos").remove([fileName]);
-
-      if (deleteError) {
-         console.warn(`[VideoConversion] Warning: Failed to delete raw file from Supabase: ${deleteError.message}`);
-      } else {
-         console.log(`[VideoConversion] Raw file deleted from Supabase: ${fileName}`);
-      }
-
-      // Success response
-      res.status(200).json(new ApiResponse(200, uploadResult.data, "Video converted and uploaded successfully"));
-   } catch (error: any) {
-      console.error(`[VideoConversion] Error:`, error);
-
-      // Clean up raw file from Supabase on error
-      try {
-         await supabase.storage.from("raw-videos").remove([fileName]);
-         console.log(`[VideoConversion] Cleaned up raw file after error: ${fileName}`);
-      } catch (cleanupError) {
-         console.warn(`[VideoConversion] Failed to cleanup raw file:`, cleanupError);
-      }
-
-      // Handle different error types
-      if (error instanceof ApiError) {
-         return next(error);
-      }
-
-      // Generic error handling
-      const errorMessage = error.message || "Video conversion failed";
-      return next(new ApiError(500, errorMessage));
-   } finally {
-      // Always clean up temporary file
-      if (tempPath) {
-         try {
-            await fs.unlink(tempPath);
-            console.log(`[VideoConversion] Temp file cleaned up: ${tempPath}`);
-         } catch (cleanupError) {
-            console.warn(`[VideoConversion] Failed to cleanup temp file: ${tempPath}`, cleanupError);
-         }
-      }
+      return next(new ApiError(400, `Video conversion failed: ${error.message}`));
    }
 });
 
@@ -727,10 +507,10 @@ export {
    bulkArchiveFiles,
    bulkDeleteFiles,
    bulkDeleteOriginalFiles,
-   convertVideoFromUrl,
    bulkRestoreFromTrash,
    bulkTrashFiles,
    bulkUnarchiveFiles,
+   convertVideo,
    deleteFile,
    emptyTrash,
    fileUpload,
@@ -741,7 +521,5 @@ export {
    permanentlyDeleteFiles,
    restoreFromTrash,
    trashFile,
-   unarchiveFile,
-   convertVideo,
-   getJobStatus
+   unarchiveFile
 };

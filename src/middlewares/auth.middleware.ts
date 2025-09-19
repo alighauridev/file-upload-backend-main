@@ -48,7 +48,8 @@ export const verifyUser = async (req: Request, res: Response, next: NextFunction
             } else if (error.message === "INVALID_TOKEN") {
                return next(new ApiError(401, "AUTH_INVALID_TOKEN"));
             } else {
-               return next(new ApiError(401, "AUTH_FAILED"));
+               console.log({ error });
+               return next(new ApiError(400, error.message));
             }
          }
       }

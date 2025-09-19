@@ -13,10 +13,7 @@ const envSchema = z.object({
    SUPABASE_ANON_KEY: z.string().nonempty(),
    SUPABASE_BUCKET_NAME: z.string().nonempty(),
    USER_STORAGE_LIMIT: z.string().default("100MB"),
-   TRASH_RETENTION_DAYS: z.coerce.number().default(30),
-   REDIS_HOST: z.string().default("localhost"),
-   REDIS_PORT: z.coerce.number().default(6379),
-   REDIS_PASSWORD: z.string()
+   TRASH_RETENTION_DAYS: z.coerce.number().default(30)
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

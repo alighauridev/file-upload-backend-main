@@ -1,5 +1,5 @@
-import * as fileControllers from "../controllers/file.contollers";
 import { Router } from "express";
+import * as fileControllers from "../controllers/file.contollers";
 import { verifyUser } from "../middlewares/auth.middleware";
 import { dualFileUpload, singleFile, videoFile } from "../middlewares/multer.middleware";
 
@@ -29,8 +29,5 @@ router.post("/trash/:id", verifyUser, fileControllers.trashFile);
 router.post("/restore/:id", verifyUser, fileControllers.restoreFromTrash);
 
 router.route("/:id").get(verifyUser, fileControllers.getFileDetails).delete(verifyUser, fileControllers.deleteFile);
-
-router.get("/conversion-status/:jobId", verifyUser, fileControllers.getJobStatus); // Changed this line
-router.post("/convert-video-from-url", verifyUser, fileControllers.convertVideoFromUrl);
 
 export default router;

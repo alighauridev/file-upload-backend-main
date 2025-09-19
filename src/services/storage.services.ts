@@ -603,6 +603,7 @@ class StorageService {
    }
 
    private static async processFileName(originalName: string, userId: string, mimeType?: string) {
+      console.log({ originalName, userId, mimeType });
       const latest = await FileService.getLatestFrameNumber(userId);
       const nextFrame = latest + 1;
       // Prefer extension derived from mimeType when provided to avoid mismatches after processing (e.g., mp4 -> mjpeg)

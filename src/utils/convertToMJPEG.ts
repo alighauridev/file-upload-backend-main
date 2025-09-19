@@ -19,7 +19,7 @@ interface VideoConversionOptions {
 
 async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.File> {
    const fileSizeMB = file.size / (1024 * 1024);
-   const maxSizeMB = 15;
+   const maxSizeMB = 30;
    if (fileSizeMB > maxSizeMB) {
       throw new Error(`File too large: ${fileSizeMB.toFixed(1)}MB. Maximum: ${maxSizeMB}MB`);
    }
@@ -131,7 +131,7 @@ async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.F
 
 async function convertToMJPEG(file: Express.Multer.File, options: VideoConversionOptions = {}): Promise<void> {
    const fileSizeMB = file.size / (1024 * 1024);
-   const maxSizeMB = 15;
+   const maxSizeMB = 30;
    if (fileSizeMB > maxSizeMB) {
       throw new Error(`File too large: ${fileSizeMB.toFixed(1)}MB. Maximum: ${maxSizeMB}MB`);
    }
