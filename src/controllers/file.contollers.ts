@@ -11,7 +11,6 @@ import { convertToAAC, convertToMJPEG, VideoConversionOptions } from "../utils/c
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
    const file = req.file as Express.Multer.File;
-   console.log("File :", file);
    if (!file) {
       return next(new ApiError(400, "Please provide a file"));
    }
@@ -49,7 +48,6 @@ const fileUpload = asyncHandler(async (req, res, next) => {
 const fileUploadWithOriginal = asyncHandler(async (req, res, next) => {
    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
    const userId = req.user?.id!;
-   console.log("File :", files);
 
    if (!files?.originalFile?.[0] || !files?.processedFile?.[0]) {
       return next(new ApiError(400, "Please provide both originalFile and processedFile"));
@@ -171,7 +169,6 @@ const deleteFile = asyncHandler(async (req, res, next) => {
 // Bulk Delete Files
 const bulkDeleteFiles = asyncHandler(async (req, res, next) => {
    const { fileIds } = req.body;
-   console.log("File IDs :", fileIds);
    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
       return next(new ApiError(400, "Please provide an array of file IDs"));
    }
@@ -202,7 +199,6 @@ const bulkDeleteFiles = asyncHandler(async (req, res, next) => {
 // Bulk Delete Files
 const bulkDeleteOriginalFiles = asyncHandler(async (req, res, next) => {
    const { fileIds } = req.body;
-   console.log("File IDs :", fileIds);
    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
       return next(new ApiError(400, "Please provide an array of file IDs"));
    }
@@ -489,7 +485,6 @@ const convertVideo = asyncHandler(async (req, res, next) => {
       }
 
       console.log("Video and audio upload completed successfully");
-      console.log("Sending response to client...");
 
       res.status(200).json(new ApiResponse(200, data, "Video converted and uploaded successfully"));
       console.log("Response sent successfully");

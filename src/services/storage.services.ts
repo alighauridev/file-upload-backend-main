@@ -77,7 +77,6 @@ class StorageService {
                if (cleanupError.code !== "ENOENT") {
                   console.warn(`Failed to delete temp file: ${file.path}`, cleanupError.message);
                }
-               // If ENOENT, file already deleted - that's fine
             }
          }
          if (response.error && response.data === null) {
@@ -265,7 +264,6 @@ class StorageService {
          const processedFilePath = `${folderPath}${processedFileName}`;
          const originalFilePath = `${folderPath}${originalFileName}`;
 
-         // Upload DIFFERENT files in parallel
          const [processedResponse, originalResponse] = await Promise.all([
             supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(processedFilePath, processedFile.buffer, {
                contentType: processedFile.mimetype,
@@ -285,7 +283,6 @@ class StorageService {
          const processedFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${processedFilePath}`;
          const originalFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${originalFilePath}`;
 
-         // Create records for DIFFERENT files
          const [userFile, originalFileRecord] = await Promise.all([
             FileService.create({
                fileName: processedFileName,
@@ -625,7 +622,7 @@ class StorageService {
       console.log({ originalName, userId, mimeType });
       const latest = await FileService.getLatestFrameNumber(userId);
       const nextFrame = latest + 1;
-      // Prefer extension derived from mimeType when provided to avoid mismatches after processing (e.g., mp4 -> mjpeg)
+
       const mimeToExt: Record<string, string> = {
          "video/x-mjpeg": "mjpeg",
          "video/mp4": "mp4",
