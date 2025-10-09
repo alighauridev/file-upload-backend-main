@@ -17,7 +17,7 @@ interface VideoConversionOptions {
    mjpegQuality?: number;
 }
 
-async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.File> {
+async function convertToMP3(file: Express.Multer.File): Promise<Express.Multer.File> {
    const fileSizeMB = file.size / (1024 * 1024);
    const maxSizeMB = 30;
    if (fileSizeMB > maxSizeMB) {
@@ -37,7 +37,7 @@ async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.F
    }
 
    const inputPath = file.path;
-   const outputPath = path.join(os.tmpdir(), `backend_audio_${Date.now()}.aac`);
+   const outputPath = path.join(os.tmpdir(), `backend_audio_${Date.now()}.mp3`);
 
    try {
       const args = [
@@ -50,12 +50,8 @@ async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.F
          "44100",
          "-ac",
          "1",
-         "-ab",
-         "24k",
-         "-filter:a",
-         "loudnorm",
-         "-filter:a",
-         "volume=-5dB",
+         "-q:a",
+         "9",
          "-vn", // No video
          "-y",
          outputPath
@@ -111,12 +107,12 @@ async function convertToAAC(file: Express.Multer.File): Promise<Express.Multer.F
       // Create and return audio file object with buffer only
       const audioFile: Express.Multer.File = {
          fieldname: "audio",
-         originalname: `${baseName}.aac`,
+         originalname: `${baseName}.mp3`,
          encoding: "7bit",
-         mimetype: "audio/aac",
+         mimetype: "audio/mpeg",
          size: converted.length,
          destination: "",
-         filename: `${baseName}.aac`,
+         filename: `${baseName}.mp3`,
          path: "",
          buffer: converted,
          stream: null as any
@@ -272,4 +268,4 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       throw new Error(`Backend video conversion failed: ${error.message || "Unknown error"}`);
    }
 }
-export { convertToMJPEG, convertToAAC, VideoConversionOptions };
+export { convertToMJPEG, convertToMP3, VideoConversionOptions };

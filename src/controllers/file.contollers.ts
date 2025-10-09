@@ -7,7 +7,7 @@ import StorageService from "../services/storage.services";
 import ApiError from "../utils/ApiError";
 import ApiResponse from "../utils/ApiResponse";
 import asyncHandler from "../utils/asyncHandler";
-import { convertToAAC, convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
+import { convertToMP3, convertToMJPEG, VideoConversionOptions } from "../utils/convertToMJPEG";
 // Upload File
 const fileUpload = asyncHandler(async (req, res, next) => {
    const file = req.file as Express.Multer.File;
@@ -463,7 +463,7 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          useLanczos: req.body.useLanczos
       };
 
-      const [, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToAAC(file)]);
+      const [, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToMP3(file)]);
 
       console.log("Backend Video and Audio Conversion Finish");
 

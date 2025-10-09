@@ -9,6 +9,7 @@ import { supabase } from "../utils/supabase-client";
 import FileService, { getFileType } from "./file.services";
 import OriginalFileService from "./original-file.services";
 import UserService from "./user.services";
+
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
 
@@ -169,7 +170,7 @@ class StorageService {
          const folderPath = `${folderName}/`;
 
          const videoFileName = await this.processFileName(fileName || videoFile.originalname, userId, "video/x-mjpeg");
-         const audioFileName = videoFileName.replace(/\.[^.]+$/, ".aac");
+         const audioFileName = videoFileName.replace(/\.[^.]+$/, ".mp3");
 
          const videoFilePath = `${folderPath}${videoFileName}`;
          const audioFilePath = `${folderPath}${audioFileName}`;
@@ -187,7 +188,7 @@ class StorageService {
                cacheControl: "3600"
             }),
             supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(audioFilePath, audioBuffer, {
-               contentType: "audio/aac",
+               contentType: "audio/mpeg",
                cacheControl: "3600"
             })
          ]);
