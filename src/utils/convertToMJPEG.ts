@@ -150,7 +150,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       quality = 5,
       transpose = 1,
       pixFmt = "yuvj420p",
-      cropWidth = 240,
+      cropWidth = 320,
       cropHeight = 240,
       cropXOffset = "(iw-ow)/2",
       cropYOffset = "(ih-oh)/2",
@@ -160,8 +160,8 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    const safeFps = Math.min(Number(fps), 24);
    const safeQuality = Number(quality) || 25;
    const safeTranspose = Math.max(0, Math.min(3, Number(transpose) || 1));
-   const safeCropWidth = Math.min(Number(cropWidth) || 240, 480);
-   const safeCropHeight = Math.min(Number(cropHeight) || 240, 480);
+   const safeCropWidth = Number(cropWidth) || 320;
+   const safeCropHeight = Number(cropHeight) || 240;
 
    console.log("MJPEG Backend Conversion parameters:", {
       fps: safeFps,
@@ -182,9 +182,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       filters.push(`fps=${safeFps}`);
 
       // Add cropping
-      if (safeCropWidth < 480 || safeCropHeight < 480) {
-         filters.push(`crop=${safeCropWidth}:${safeCropHeight}:${cropXOffset}:${cropYOffset}`);
-      }
+      filters.push(`crop=${safeCropWidth}:${safeCropHeight}:${cropXOffset}:${cropYOffset}`);
 
       // Add transpose
       if (safeTranspose > 0) {
