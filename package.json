@@ -39,6 +39,7 @@
    },
    "dependencies": {
       "@supabase/supabase-js": "^2.49.10",
+      "@types/ffprobe": "^1.1.8",
       "bcryptjs": "^3.0.0",
       "bytes": "^3.1.2",
       "compression": "^1.8.0",

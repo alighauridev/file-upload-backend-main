@@ -448,13 +448,13 @@ const convertVideo = asyncHandler(async (req, res, next) => {
    }
 
    try {
-      console.log("Backend Video Conversion Start");
-      console.log(`Processing file: ${file.originalname}, Size: ${file.size} bytes`);
+      console.log("[BACKEND] Video Conversion Start");
+      console.log(`[BACKEND] Processing file: ${file.originalname}, Size: ${file.size} bytes`);
 
       const videoOptions: VideoConversionOptions = {
          fps: req.body.fps,
          quality: req.body.quality || 5,
-         transpose: req.body.transpose,
+         transpose: req.body.transpose ?? 0,
          pixFmt: req.body.pixFmt,
          cropWidth: req.body.cropWidth,
          cropHeight: req.body.cropHeight,
@@ -462,6 +462,12 @@ const convertVideo = asyncHandler(async (req, res, next) => {
          cropYOffset: req.body.cropYOffset,
          useLanczos: req.body.useLanczos
       };
+
+      console.log("[BACKEND] Received options:", {
+         cropWidth: videoOptions.cropWidth,
+         cropHeight: videoOptions.cropHeight,
+         transpose: videoOptions.transpose
+      });
 
       const [, audioFile] = await Promise.all([convertToMJPEG(file, videoOptions), convertToMP3(file)]);
 
