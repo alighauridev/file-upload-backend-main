@@ -148,7 +148,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    const {
       fps = 24,
       quality = 5,
-      transpose = 1,
+      transpose = 0,
       pixFmt = "yuvj420p",
       cropWidth = 320,
       cropHeight = 240,
@@ -159,7 +159,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
 
    const safeFps = Math.min(Number(fps), 24);
    const safeQuality = Number(quality) || 25;
-   const safeTranspose = Math.max(0, Math.min(3, Number(transpose) || 1));
+   const safeTranspose = Math.max(0, Math.min(3, Number(transpose) || 0));
    const safeCropWidth = Number(cropWidth) || 320;
    const safeCropHeight = Number(cropHeight) || 240;
 
@@ -185,9 +185,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       filters.push(`crop=${safeCropWidth}:${safeCropHeight}:${cropXOffset}:${cropYOffset}`);
 
       // Add transpose
-      if (safeTranspose > 0) {
-         filters.push(`transpose=${safeTranspose}`);
-      }
+      filters.push(`transpose=${safeTranspose}`);
 
       const vf = filters.join(",");
 
