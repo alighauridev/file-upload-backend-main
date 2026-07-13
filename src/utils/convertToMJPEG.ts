@@ -3,6 +3,9 @@ import { promises as fs } from "fs";
 import { createRequire } from "module";
 import os from "os";
 import path from "path";
+import ffprobe from "ffprobe";
+// @ts-ignore
+import ffprobeStatic from "ffprobe-static";
 
 interface VideoConversionOptions {
    fps?: number;
@@ -52,12 +55,12 @@ async function convertToMP3(file: Express.Multer.File): Promise<Express.Multer.F
          "1",
          "-q:a",
          "9",
-         "-vn", // No video
+         "-vn",
          "-y",
          outputPath
       ];
 
-      console.log("Backend Audio FFmpeg command:", ffmpegPath, args.join(" "));
+      console.log("[BACKEND AUDIO] FFmpeg command:", ffmpegPath, args.join(" "));
 
       await new Promise<void>((resolve, reject) => {
          const proc = spawn(ffmpegPath!, args, {
@@ -84,7 +87,7 @@ async function convertToMP3(file: Express.Multer.File): Promise<Express.Multer.F
          proc.on("close", (code) => {
             clearTimeout(timer);
             if (code === 0) {
-               console.log("Backend Audio FFmpeg conversion completed successfully");
+               console.log("[BACKEND AUDIO] FFmpeg conversion completed");
                resolve();
             } else {
                reject(new Error(`Backend Audio FFmpeg exited with code ${code}: ${stderrData}`));
@@ -95,16 +98,17 @@ async function convertToMP3(file: Express.Multer.File): Promise<Express.Multer.F
       const converted = await fs.readFile(outputPath);
       const baseName = (file.originalname?.split(".").slice(0, -1).join(".") || "audio").trim() || "audio";
 
-      console.log(`Backend audio conversion complete. Input: ${file.size}, Output: ${converted.length}`);
+      console.log("[BACKEND AUDIO] Conversion complete:", {
+         inputBytes: file.size,
+         outputBytes: converted.length
+      });
 
-      // Clean up temp file immediately since we have buffer
       try {
          await fs.unlink(outputPath);
       } catch (cleanupError) {
-         console.warn(`Failed to cleanup temp audio file: ${outputPath}`, cleanupError);
+         console.warn(`[BACKEND AUDIO] Failed to clean up temp file: ${outputPath}`, cleanupError);
       }
 
-      // Create and return audio file object with buffer only
       const audioFile: Express.Multer.File = {
          fieldname: "audio",
          originalname: `${baseName}.mp3`,
@@ -120,7 +124,7 @@ async function convertToMP3(file: Express.Multer.File): Promise<Express.Multer.F
 
       return audioFile;
    } catch (error: any) {
-      console.error("Backend audio conversion error:", error);
+      console.error("[BACKEND AUDIO] Conversion error:", error);
       throw new Error(`Backend audio conversion failed: ${error.message || "Unknown error"}`);
    }
 }
@@ -131,7 +135,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    if (fileSizeMB > maxSizeMB) {
       throw new Error(`File too large: ${fileSizeMB.toFixed(1)}MB. Maximum: ${maxSizeMB}MB`);
    }
-   console.log(options);
+   console.log("[BACKEND VIDEO] Raw options received:", options);
 
    let ffmpegPath: string | undefined;
    try {
@@ -159,14 +163,19 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
 
    const safeFps = Math.min(Number(fps), 24);
    const safeQuality = Number(quality) || 25;
-   const safeTranspose = Math.max(0, Math.min(3, Number(transpose) || 0));
    const safeCropWidth = Number(cropWidth) || 320;
    const safeCropHeight = Number(cropHeight) || 240;
 
-   console.log("MJPEG Backend Conversion parameters:", {
+   // ffmpeg has no "no rotation" transpose value (0-3 are all 90 deg rotations),
+   // so 0 means "skip the filter" here rather than being passed to ffmpeg.
+   const requestedTranspose = Number(transpose) || 0;
+   const safeTranspose = requestedTranspose >= 1 && requestedTranspose <= 3 ? requestedTranspose : 0;
+
+   console.log("[BACKEND VIDEO] Conversion params:", {
       fps: safeFps,
       quality: safeQuality,
       transpose: safeTranspose,
+      rotates: safeTranspose !== 0,
       cropWidth: safeCropWidth,
       cropHeight: safeCropHeight
    });
@@ -175,19 +184,25 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
    const outputPath = path.join(os.tmpdir(), `backend_out_${Date.now()}.mjpeg`);
 
    try {
-      // Build filter chain with fps control
-      const filters = [];
+      try {
+         const inputData = await ffprobe(inputPath, { path: ffprobeStatic.path });
+         const stream = inputData.streams?.[0];
+         if (stream) {
+            console.log("[BACKEND VIDEO] Input dimensions:", `${stream.width}x${stream.height}`);
+         }
+      } catch (probeError) {
+         console.warn("[BACKEND VIDEO] Could not probe input dimensions:", probeError);
+      }
 
-      // Add fps reduction first for smaller file
-      filters.push(`fps=${safeFps}`);
+      const filters = [`fps=${safeFps}`, `crop=${safeCropWidth}:${safeCropHeight}:${cropXOffset}:${cropYOffset}`];
 
-      // Add cropping
-      filters.push(`crop=${safeCropWidth}:${safeCropHeight}:${cropXOffset}:${cropYOffset}`);
-
-      // Add transpose
-      filters.push(`transpose=${safeTranspose}`);
+      // Any transpose swaps width/height, so only apply it when a rotation was actually requested.
+      if (safeTranspose !== 0) {
+         filters.push(`transpose=${safeTranspose}`);
+      }
 
       const vf = filters.join(",");
+      console.log("[BACKEND VIDEO] Filter chain:", vf);
 
       const args = [
          "-hide_banner",
@@ -208,7 +223,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
          outputPath
       ];
 
-      console.log("Backend FFmpeg command:", ffmpegPath, args.join(" "));
+      console.log("[BACKEND VIDEO] FFmpeg command:", ffmpegPath, args.join(" "));
 
       await new Promise<void>((resolve, reject) => {
          const proc = spawn(ffmpegPath!, args, {
@@ -235,7 +250,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
          proc.on("close", (code) => {
             clearTimeout(timer);
             if (code === 0) {
-               console.log("Backend FFmpeg conversion completed successfully");
+               console.log("[BACKEND VIDEO] FFmpeg conversion completed");
                resolve();
             } else {
                reject(new Error(`Backend FFmpeg exited with code ${code}: ${stderrData}`));
@@ -246,13 +261,37 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       const converted = await fs.readFile(outputPath);
       const baseName = (file.originalname?.split(".").slice(0, -1).join(".") || "video").trim() || "video";
 
-      console.log(`Backend conversion complete. Input: ${file.size}, Output: ${converted.length}`);
+      try {
+         const outputData = await ffprobe(outputPath, { path: ffprobeStatic.path });
+         const stream = outputData.streams?.[0];
+         if (stream) {
+            const expectedWidth = safeTranspose === 0 ? safeCropWidth : safeCropHeight;
+            const expectedHeight = safeTranspose === 0 ? safeCropHeight : safeCropWidth;
+            const matches = stream.width === expectedWidth && stream.height === expectedHeight;
+
+            console.log("[BACKEND VIDEO] Output dimensions:", {
+               actual: `${stream.width}x${stream.height}`,
+               expected: `${expectedWidth}x${expectedHeight}`,
+               matches
+            });
+
+            if (!matches) {
+               console.warn("[BACKEND VIDEO] Output does not match the requested resolution");
+            }
+         }
+      } catch (probeError) {
+         console.warn("[BACKEND VIDEO] Could not probe output dimensions:", probeError);
+      }
+
+      console.log("[BACKEND VIDEO] Conversion complete:", {
+         inputBytes: file.size,
+         outputBytes: converted.length
+      });
 
       try {
          await fs.unlink(outputPath);
-         console.log(`✅ Cleaned up video temp file: ${outputPath}`);
       } catch (cleanupError) {
-         console.warn(`Failed to cleanup temp video file: ${outputPath}`, cleanupError);
+         console.warn(`[BACKEND VIDEO] Failed to clean up temp file: ${outputPath}`, cleanupError);
       }
 
       file.buffer = converted;
@@ -260,7 +299,7 @@ async function convertToMJPEG(file: Express.Multer.File, options: VideoConversio
       file.originalname = `${baseName}.mjpeg`;
       file.mimetype = "video/x-mjpeg";
    } catch (error: any) {
-      console.error("Backend video conversion error:", error);
+      console.error("[BACKEND VIDEO] Conversion error:", error);
       throw new Error(`Backend video conversion failed: ${error.message || "Unknown error"}`);
    }
 }
