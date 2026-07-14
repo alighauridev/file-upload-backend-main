@@ -1,7 +1,9 @@
 import { Router } from "express";
 import * as fileControllers from "../controllers/file.contollers";
+import * as processedVideoControllers from "../controllers/processedVideo.controllers";
 import { verifyUser } from "../middlewares/auth.middleware";
 import { dualFileUpload, singleFile, videoFile } from "../middlewares/multer.middleware";
+import { processedVideoFiles } from "../middlewares/processedVideo.middleware";
 
 const router = Router();
 
@@ -9,6 +11,12 @@ const router = Router();
 router.post("/upload", verifyUser, singleFile, fileControllers.fileUpload);
 router.post("/upload-with-original", verifyUser, dualFileUpload, fileControllers.fileUploadWithOriginal);
 router.post("/convert-video", verifyUser, videoFile, fileControllers.convertVideo);
+router.post(
+   "/upload-processed-video",
+   verifyUser,
+   processedVideoFiles,
+   processedVideoControllers.uploadProcessedVideo
+);
 router.get("/originals", verifyUser, fileControllers.getUserOriginals);
 router.post("/originals/bulk-delete", verifyUser, fileControllers.bulkDeleteOriginalFiles);
 
