@@ -5,9 +5,7 @@ import { HelmetOptions } from "helmet";
 
 const cors: CorsOptions = {
    origin: ["https://file-uploader-app-sigma.vercel.app", "https://file-upload-web.vercel.app", "http://localhost:3000", "http://localhost:3001"],
-   credentials: true,
-   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-   allowedHeaders: ["Content-Type", "Authorization", "Accept"]
+   credentials: true
 };
 const helemt: HelmetOptions = {
    contentSecurityPolicy: env.NODE_ENV !== "development",
