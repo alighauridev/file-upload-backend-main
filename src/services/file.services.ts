@@ -119,6 +119,7 @@ class FileService {
          fileUrl: true,
          audioUrl: true,
          fileSize: true,
+         fileType: true,
          status: true,
          createdAt: true,
          updatedAt: true
