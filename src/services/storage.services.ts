@@ -284,14 +284,16 @@ class StorageService {
          const processedFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${processedFilePath}`;
          const originalFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${originalFilePath}`;
 
-         const [userFile, originalFileRecord] = await Promise.all([
-            FileService.create({
-               fileName: processedFileName,
-               fileUrl: processedFileUrl,
-               mimeType: processedFile.mimetype,
-               fileSize: filesize(processedFile.size, { standard: "jedec" }),
-               userId: userId
-            }),
+          const fileType = getFileType(processedFile.mimetype);
+          const [userFile, originalFileRecord] = await Promise.all([
+             FileService.create({
+                fileName: processedFileName,
+                fileUrl: processedFileUrl,
+                mimeType: processedFile.mimetype,
+                fileType,
+                fileSize: filesize(processedFile.size, { standard: "jedec" }),
+                userId: userId
+             }),
             OriginalFileService.create({
                userId: userId,
                fileName: originalFileName,
