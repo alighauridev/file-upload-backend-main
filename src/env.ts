@@ -20,6 +20,10 @@ const envSchema = z.object({
    USER_STORAGE_LIMIT: z.string().default("100MB"),
    TRASH_RETENTION_DAYS: z.coerce.number().default(30)
 }).superRefine((value, ctx) => {
+   // Docker storage is development-only: a hosted deploy must run in production mode (Supabase)
+   if (value.NODE_ENV !== "production" && (process.env.RENDER || process.env.VERCEL)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["NODE_ENV"], message: "Hosted deploys must run with NODE_ENV=production" });
+   }
    if (value.NODE_ENV === "production") {
       for (const key of ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_BUCKET_NAME"] as const) {
          if (!value[key]) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is required in production` });
