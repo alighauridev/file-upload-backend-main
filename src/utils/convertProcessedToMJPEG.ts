@@ -88,7 +88,8 @@ async function convertProcessedToMJPEG(
                proc.kill("SIGKILL");
                reject(new Error("FFmpeg MJPEG conversion timed out"));
             },
-            2 * 60 * 1000
+            // Generous so long clips aren't cut off; this only guards against a hung ffmpeg
+            30 * 60 * 1000
          );
 
          let stderrData = "";

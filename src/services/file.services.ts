@@ -14,8 +14,12 @@ export const getFileType = (mimeType: string): (typeof FileType)[keyof typeof Fi
 };
 
 class FileService {
+   // Uploads land in the Archive once processing is done, unless the caller sets a status
    public static async create(data: InsertUserFile) {
-      const [userFile] = await db.insert(userFiles).values(data).returning({
+      const [userFile] = await db
+         .insert(userFiles)
+         .values({ status: FileStatusType.ARCHIVED, archivedAt: new Date(), ...data })
+         .returning({
          id: userFiles.id,
          userId: userFiles.userId,
          fileName: userFiles.fileName,

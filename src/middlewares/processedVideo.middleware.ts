@@ -16,8 +16,8 @@ const processedVideoStorage = multer.diskStorage({
 
 const processedVideoUpload = multer({
    storage: processedVideoStorage,
+   // No file size limit so clip length isn't capped; the user's storage quota is checked before saving
    limits: {
-      fileSize: 100 * 1024 * 1024,
       files: 2
    },
    fileFilter: (req, file, cb) => {

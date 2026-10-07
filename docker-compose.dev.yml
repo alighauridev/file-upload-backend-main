@@ -1,0 +1,41 @@
+# Local services for development: npm run db:up
+# Production uses Supabase (Postgres + Storage) instead.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: file-upload-postgres
+    environment:
+      POSTGRES_USER: file_upload
+      POSTGRES_PASSWORD: file_upload_dev
+      POSTGRES_DB: file_upload
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U file_upload -d file_upload"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Minimal file server standing in for Supabase Storage (dev-storage/server.mjs)
+  storage:
+    image: node:22-alpine
+    container_name: file-upload-storage
+    command: node /app/server.mjs
+    environment:
+      STORAGE_TOKEN: file_upload_dev_storage
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ./dev-storage/server.mjs:/app/server.mjs:ro
+      - storage-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  storage-data:

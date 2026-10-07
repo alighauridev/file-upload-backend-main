@@ -2,10 +2,9 @@ import bytes from "bytes";
 import { filesize } from "filesize";
 import fs from "node:fs/promises";
 import { CACHE_KEY_PREFIX, FileType } from "../constants";
-import { env } from "../env";
 import { userCache } from "../middlewares/auth.middleware";
 import { UploadFilePayload, UploadFileResponse, UploadFileWithOriginalResponse } from "../types/storage.types";
-import { supabase } from "../utils/supabase-client";
+import { objectStorage } from "../utils/object-storage";
 import FileService, { getFileType } from "./file.services";
 import OriginalFileService from "./original-file.services";
 import UserService from "./user.services";
@@ -58,16 +57,13 @@ class StorageService {
             };
          }
 
-         console.time("supabase_upload");
+         console.time("storage_upload");
          console.log(
-            `[uploadFile] Uploading to bucket='${env.SUPABASE_BUCKET_NAME}' path='${fullFilePath}' size=${fileSize}B type='${file.mimetype}' url='${env.SUPABASE_URL}'`
+            `[uploadFile] Uploading to bucket='${objectStorage.bucketName}' path='${fullFilePath}' size=${fileSize}B type='${file.mimetype}'`
          );
 
-         const response = await supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(fullFilePath, fileBuffer, {
-            contentType: file.mimetype,
-            cacheControl: "3600"
-         });
-         console.timeEnd("supabase_upload");
+         const response = await objectStorage.upload(objectStorage.bucketName, fullFilePath, fileBuffer, file.mimetype);
+         console.timeEnd("storage_upload");
 
          if (file.path) {
             try {
@@ -88,7 +84,7 @@ class StorageService {
             };
          }
 
-         const fileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${fullFilePath}`;
+         const fileUrl = objectStorage.publicUrl(objectStorage.bucketName, fullFilePath);
 
          console.time("db_create_and_storage_update");
          const [userFile, storage] = await Promise.all([
@@ -152,13 +148,6 @@ class StorageService {
          const audioFileSize = Number(audioFile.size);
          const totalSize = videoFileSize + audioFileSize;
 
-         if (videoFileSize > MAX_VIDEO_SIZE) {
-            return {
-               error: `Video size exceeds maximum allowed size of ${filesize(MAX_VIDEO_SIZE)}`,
-               data: null
-            };
-         }
-
          const storageInfo = await UserService.hasEnoughStorage(userId, totalSize);
          if (!storageInfo?.hasEnough) {
             return {
@@ -183,14 +172,8 @@ class StorageService {
          const audioBuffer = audioFile.buffer;
 
          const [videoResponse, audioResponse] = await Promise.all([
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(videoFilePath, videoBuffer, {
-               contentType: "video/x-mjpeg",
-               cacheControl: "3600"
-            }),
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(audioFilePath, audioBuffer, {
-               contentType: "audio/mpeg",
-               cacheControl: "3600"
-            })
+            objectStorage.upload(objectStorage.bucketName, videoFilePath, videoBuffer, "video/x-mjpeg"),
+            objectStorage.upload(objectStorage.bucketName, audioFilePath, audioBuffer, "audio/mpeg")
          ]);
 
          if (videoResponse.error && audioResponse.error) {
@@ -204,8 +187,8 @@ class StorageService {
          videoFile.buffer = Buffer.alloc(0);
          audioFile.buffer = Buffer.alloc(0);
 
-         const videoUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${videoFilePath}`;
-         const audioUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${audioFilePath}`;
+         const videoUrl = objectStorage.publicUrl(objectStorage.bucketName, videoFilePath);
+         const audioUrl = objectStorage.publicUrl(objectStorage.bucketName, audioFilePath);
 
          // Create database record and update storage
          const [userFile, storage] = await Promise.all([
@@ -266,14 +249,8 @@ class StorageService {
          const originalFilePath = `${folderPath}${originalFileName}`;
 
          const [processedResponse, originalResponse] = await Promise.all([
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(processedFilePath, processedFile.buffer, {
-               contentType: processedFile.mimetype,
-               cacheControl: "3600"
-            }),
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).upload(originalFilePath, originalFile.buffer, {
-               contentType: originalFile.mimetype,
-               cacheControl: "3600"
-            })
+            objectStorage.upload(objectStorage.bucketName, processedFilePath, processedFile.buffer, processedFile.mimetype),
+            objectStorage.upload(objectStorage.bucketName, originalFilePath, originalFile.buffer, originalFile.mimetype)
          ]);
 
          if (processedResponse.error || originalResponse.error) {
@@ -281,8 +258,8 @@ class StorageService {
             return { error, data: null };
          }
 
-         const processedFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${processedFilePath}`;
-         const originalFileUrl = `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_BUCKET_NAME}/${originalFilePath}`;
+         const processedFileUrl = objectStorage.publicUrl(objectStorage.bucketName, processedFilePath);
+         const originalFileUrl = objectStorage.publicUrl(objectStorage.bucketName, originalFilePath);
 
           const fileType = getFileType(processedFile.mimetype);
           const [userFile, originalFileRecord] = await Promise.all([
@@ -335,7 +312,7 @@ class StorageService {
          }
 
          const fileUrl = file.fileUrl;
-         const videoPath = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+         const videoPath = fileUrl.split(objectStorage.bucketName + "/")[1];
 
          if (!videoPath) {
             return {
@@ -347,14 +324,14 @@ class StorageService {
          const filesToDelete = [videoPath];
 
          if (file.audioUrl) {
-            const audioPath = file.audioUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+            const audioPath = file.audioUrl.split(objectStorage.bucketName + "/")[1];
             if (audioPath) {
                filesToDelete.push(audioPath);
             }
          }
 
          const [storageResult, _] = await Promise.all([
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove(filesToDelete),
+            objectStorage.remove(objectStorage.bucketName, filesToDelete),
             FileService.delete(fileId)
          ]);
 
@@ -411,13 +388,13 @@ class StorageService {
          const storagePaths: string[] = [];
 
          validFiles.forEach((file: any) => {
-            const videoPath = file.fileUrl?.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+            const videoPath = file.fileUrl?.split(objectStorage.bucketName + "/")[1];
             if (videoPath) {
                storagePaths.push(videoPath);
             }
 
             if (file.audioUrl) {
-               const audioPath = file.audioUrl.split(env.SUPABASE_BUCKET_NAME + "/")[1];
+               const audioPath = file.audioUrl.split(objectStorage.bucketName + "/")[1];
                if (audioPath) {
                   storagePaths.push(audioPath);
                }
@@ -435,7 +412,7 @@ class StorageService {
 
          let storageResult;
          if (storagePaths.length > 0) {
-            storageResult = await supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove(storagePaths);
+            storageResult = await objectStorage.remove(objectStorage.bucketName, storagePaths);
 
             if (storageResult.error) {
                return {
@@ -488,7 +465,7 @@ class StorageService {
          }
 
          const fileUrl = originalFile.fileUrl;
-         const pathArray = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/");
+         const pathArray = fileUrl.split(objectStorage.bucketName + "/");
          const filePath = pathArray[1];
 
          if (!filePath) {
@@ -499,7 +476,7 @@ class StorageService {
          }
 
          const [storageResult, deletedRecord] = await Promise.all([
-            supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove([filePath]),
+            objectStorage.remove(objectStorage.bucketName, [filePath]),
             OriginalFileService.delete(originalFileId)
          ]);
 
@@ -562,7 +539,7 @@ class StorageService {
             .map((file: any) => {
                const fileUrl = file.fileUrl as string;
                if (!fileUrl) return null;
-               const pathArray = fileUrl.split(env.SUPABASE_BUCKET_NAME + "/");
+               const pathArray = fileUrl.split(objectStorage.bucketName + "/");
                return pathArray.length > 1 ? pathArray[1] : null;
             })
             .filter(Boolean) as string[];
@@ -578,7 +555,7 @@ class StorageService {
 
          let storageResult;
          if (storagePaths.length > 0) {
-            storageResult = await supabase.storage.from(env.SUPABASE_BUCKET_NAME).remove(storagePaths);
+            storageResult = await objectStorage.remove(objectStorage.bucketName, storagePaths);
 
             if (storageResult.error) {
                return {

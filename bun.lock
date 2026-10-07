@@ -26,6 +26,7 @@
         "pino": "^9.9.5",
         "postgres": "^3.4.5",
         "socket.io": "^4.8.1",
+        "typescript": "^7.0.2",
         "uuid": "^11.1.0",
         "zod": "^3.24.1",
       },
@@ -47,10 +48,12 @@
         "rimraf": "^6.0.1",
         "ts-node": "^10.9.2",
         "tsx": "^4.23.4",
-        "typescript": "^7.0.2",
       },
     },
   },
+  "trustedDependencies": [
+    "ffmpeg-static",
+  ],
   "packages": {
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
